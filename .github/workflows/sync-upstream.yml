@@ -1,0 +1,123 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    # Run bi-weekly (every other Monday at 2 AM UTC)
+    - cron: '0 2 */14 * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/ryoppippi/ccusage.git || true
+          git fetch upstream
+
+      - name: Check for upstream changes
+        id: check_changes
+        run: |
+          git fetch upstream main
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=$BEHIND" >> $GITHUB_OUTPUT
+
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create sync branch
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          BRANCH_NAME="sync-upstream-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Merge upstream changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        id: merge
+        run: |
+          set +e
+          git merge upstream/main -m "chore: sync with upstream ryoppippi/ccusage"
+          MERGE_STATUS=$?
+          set -e
+
+          if [ $MERGE_STATUS -eq 0 ]; then
+            echo "merge_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "merge_status=conflict" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push sync branch
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git push origin "${{ env.branch_name }}"
+
+      - name: Create Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'success'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.branch_name }}
+          title: "chore: sync with upstream ryoppippi/ccusage"
+          body: |
+            ## Automated Upstream Sync
+
+            This PR syncs the fork with the latest changes from [ryoppippi/ccusage](https://github.com/ryoppippi/ccusage).
+
+            **Changes**: ${{ steps.check_changes.outputs.behind }} commits behind upstream
+
+            ### What to do:
+            1. Review the changes to ensure they don't conflict with our custom hourly feature
+            2. Run tests locally if needed
+            3. Merge if everything looks good
+
+            ---
+            *This PR was created automatically by the sync-upstream workflow*
+          labels: dependencies,automated
+          draft: false
+
+      - name: Create Issue for Merge Conflicts
+        if: steps.check_changes.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "🔄 Manual sync needed: Merge conflicts with upstream"
+          content: |
+            ## Merge Conflicts Detected
+
+            The automated upstream sync encountered merge conflicts that need manual resolution.
+
+            **Branch**: `${{ env.branch_name }}`
+            **Upstream**: ryoppippi/ccusage
+
+            ### To resolve:
+            ```bash
+            git checkout ${{ env.branch_name }}
+            git merge upstream/main
+            # Resolve conflicts
+            git commit
+            git push origin ${{ env.branch_name }}
+            ```
+
+            Then create a PR from the branch once conflicts are resolved.
+
+            ---
+            *This issue was created automatically by the sync-upstream workflow*
+          labels: dependencies,needs-attention,automated

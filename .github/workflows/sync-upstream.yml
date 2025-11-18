@@ -91,8 +91,7 @@ jobs:
           3. Merge if everything looks good
 
           ---
-          *This PR was created automatically by the sync-upstream workflow*" \
-            --label "dependencies,automated"
+          *This PR was created automatically by the sync-upstream workflow*"
 
       - name: Create Issue for Merge Conflicts
         if: steps.check_changes.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
@@ -120,5 +119,4 @@ jobs:
           Then create a PR from the branch once conflicts are resolved.
 
           ---
-          *This issue was created automatically by the sync-upstream workflow*" \
-            --label "dependencies,needs-attention,automated"
+          *This issue was created automatically by the sync-upstream workflow*"

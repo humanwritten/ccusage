@@ -72,52 +72,53 @@ jobs:
 
       - name: Create Pull Request
         if: steps.check_changes.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'success'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.branch_name }}
-          title: "chore: sync with upstream ryoppippi/ccusage"
-          body: |
-            ## Automated Upstream Sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --head "${{ env.branch_name }}" \
+            --base main \
+            --title "chore: sync with upstream ryoppippi/ccusage" \
+            --body "## Automated Upstream Sync
 
-            This PR syncs the fork with the latest changes from [ryoppippi/ccusage](https://github.com/ryoppippi/ccusage).
+          This PR syncs the fork with the latest changes from [ryoppippi/ccusage](https://github.com/ryoppippi/ccusage).
 
-            **Changes**: ${{ steps.check_changes.outputs.behind }} commits behind upstream
+          **Changes**: ${{ steps.check_changes.outputs.behind }} commits behind upstream
 
-            ### What to do:
-            1. Review the changes to ensure they don't conflict with our custom hourly feature
-            2. Run tests locally if needed
-            3. Merge if everything looks good
+          ### What to do:
+          1. Review the changes to ensure they don't conflict with our custom hourly feature
+          2. Run tests locally if needed
+          3. Merge if everything looks good
 
-            ---
-            *This PR was created automatically by the sync-upstream workflow*
-          labels: dependencies,automated
-          draft: false
+          ---
+          *This PR was created automatically by the sync-upstream workflow*" \
+            --label "dependencies,automated"
 
       - name: Create Issue for Merge Conflicts
         if: steps.check_changes.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
-        uses: peter-evans/create-issue-from-file@v5
-        with:
-          title: "🔄 Manual sync needed: Merge conflicts with upstream"
-          content: |
-            ## Merge Conflicts Detected
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "🔄 Manual sync needed: Merge conflicts with upstream" \
+            --body "## Merge Conflicts Detected
 
-            The automated upstream sync encountered merge conflicts that need manual resolution.
+          The automated upstream sync encountered merge conflicts that need manual resolution.
 
-            **Branch**: `${{ env.branch_name }}`
-            **Upstream**: ryoppippi/ccusage
+          **Branch**: \`${{ env.branch_name }}\`
+          **Upstream**: ryoppippi/ccusage
 
-            ### To resolve:
-            ```bash
-            git checkout ${{ env.branch_name }}
-            git merge upstream/main
-            # Resolve conflicts
-            git commit
-            git push origin ${{ env.branch_name }}
-            ```
+          ### To resolve:
+          \`\`\`bash
+          git checkout ${{ env.branch_name }}
+          git merge upstream/main
+          # Resolve conflicts
+          git commit
+          git push origin ${{ env.branch_name }}
+          \`\`\`
 
-            Then create a PR from the branch once conflicts are resolved.
+          Then create a PR from the branch once conflicts are resolved.
 
-            ---
-            *This issue was created automatically by the sync-upstream workflow*
-          labels: dependencies,needs-attention,automated
+          ---
+          *This issue was created automatically by the sync-upstream workflow*" \
+            --label "dependencies,needs-attention,automated"
